@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Alert, View, Text } from 'react-native';
+import { Alert } from 'react-native';
 import { PosProvider, usePosContext } from '@/src/features/pos/state/PosProvider';
 import { useUsers } from '@/src/features/pos/hooks/useUsers';
 import { useTables } from '@/src/features/pos/hooks/useTables';
@@ -7,17 +7,6 @@ import { UserSelectScreen } from '@/src/features/pos/components/UserSelectScreen
 import { TableSelectScreen } from '@/src/features/pos/components/TableSelectScreen';
 import { OrderScreen } from '@/src/features/pos/components/OrderScreen/OrderScreen';
 
-// TEST MODE - Basit ekran
-export default function TestScreen() {
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
-      <Text style={{ fontSize: 24, fontWeight: 'bold' }}>✅ Uygulama Çalışıyor!</Text>
-      <Text style={{ fontSize: 16, marginTop: 20 }}>POS Sistemi Test Modu</Text>
-    </View>
-  );
-}
-
-/*
 function PosApp() {
   const { state, dispatch } = usePosContext();
   const { users } = useUsers();
@@ -114,11 +103,10 @@ function PosApp() {
   return <OrderScreen />;
 }
 
-function OrderScreenWrapper() {
+export default function OrderScreenWrapper() {
   return (
     <PosProvider>
       <PosApp />
     </PosProvider>
   );
 }
-*/
