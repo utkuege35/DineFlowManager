@@ -77,7 +77,9 @@ export function useSubmitOrder() {
         if (itemsError) throw itemsError;
       }
 
-      await recalculateSaleTotal(saleId);
+      if (saleId) {
+        await recalculateSaleTotal(saleId);
+      }
       Alert.alert('Başarılı', 'Sipariş gönderildi!');
       return saleId;
     } catch (err: any) {

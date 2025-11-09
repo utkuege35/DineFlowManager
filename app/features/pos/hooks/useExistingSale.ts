@@ -20,7 +20,12 @@ export function useExistingSale() {
         .eq('id', saleId)
         .single();
 
-      const items = (itemsData as SaleItem[]) || [];
+      const items = (itemsData as any[])?.map(item => ({
+        ...item,
+        products: Array.isArray(item.products) && item.products.length > 0 
+          ? item.products[0] 
+          : null
+      })) as SaleItem[] || [];
       let discount: SaleDiscount | null = null;
 
       if (!saleError && saleData && saleData.discount_amount) {
