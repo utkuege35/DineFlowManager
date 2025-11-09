@@ -1,11 +1,11 @@
 import React, { useEffect } from 'react';
 import { Alert } from 'react-native';
-import { PosProvider, usePosContext } from '../features/pos/state/PosProvider';
-import { useUsers } from '../features/pos/hooks/useUsers';
-import { useTables } from '../features/pos/hooks/useTables';
-import { UserSelectScreen } from '../features/pos/components/UserSelectScreen';
-import { TableSelectScreen } from '../features/pos/components/TableSelectScreen';
-import { OrderScreen } from '../features/pos/components/OrderScreen/OrderScreen';
+import { PosProvider, usePosContext } from '@/src/features/pos/state/PosProvider';
+import { useUsers } from '@/src/features/pos/hooks/useUsers';
+import { useTables } from '@/src/features/pos/hooks/useTables';
+import { UserSelectScreen } from '@/src/features/pos/components/UserSelectScreen';
+import { TableSelectScreen } from '@/src/features/pos/components/TableSelectScreen';
+import { OrderScreen } from '@/src/features/pos/components/OrderScreen/OrderScreen';
 
 function PosApp() {
   const { state, dispatch } = usePosContext();
