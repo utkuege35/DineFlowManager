@@ -18,12 +18,12 @@ args = "expo-app"
 name = "expo-app"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npx expo start --tunnel"
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx expo start --lan"
 
 [[ports]]
 localPort = 8081
