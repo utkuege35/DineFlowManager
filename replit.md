@@ -4,6 +4,17 @@
 
 This is a restaurant point-of-sale (POS) system built with React Native and Expo. The application enables restaurant staff to manage orders, tables, and sales through a mobile-friendly interface. The system supports multi-user workflows with role-based access, table management with merging capabilities, and sales reporting functionality.
 
+## Recent Changes
+
+**November 9, 2025** - Major Refactoring: Modular Architecture
+- Refactored 1556-line monolithic app into clean modular architecture (~20 files)
+- Created feature-oriented folder structure: `app/features/pos/{state,hooks,components,utils}`
+- Implemented centralized state management with `PosProvider` using `useReducer` pattern
+- Extracted 10+ custom hooks for business logic separation
+- Split components into discrete, reusable modules (screens, modals, sub-components)
+- Fixed TypeScript configuration for JSX support
+- Resolved all 160 LSP diagnostics (now 0 errors)
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
@@ -39,24 +50,35 @@ The application uses:
 
 **Problem**: Managing complex application state across multiple screens (user selection, table selection, order management).
 
-**Solution**: Local component state using React hooks without a global state management library.
+**Solution**: Centralized state management using React Context API with `useReducer` pattern.
 
-The application manages state hierarchically:
-- Screen-level state controls workflow progression (user-select → table-select → order)
-- Entity data (users, tables, products, categories) stored in component state
-- Order items maintained in local state before submission
-- Modal states for auxiliary features (reports, discounts)
+The application architecture:
+- **PosProvider** (`app/features/pos/state/PosProvider.tsx`): Central state container using Context API
+- **posReducer** (`app/features/pos/state/posReducer.ts`): State transitions handled via reducer pattern
+- **Custom Hooks** (`app/features/pos/hooks/`): Business logic separated into feature-specific hooks
+  - `useUsers`: User selection and PIN verification
+  - `useTables`: Table selection and management
+  - `useCategoriesProducts`: Product catalog loading
+  - `useExistingSale`: Load and manage existing orders
+  - `useSubmitOrder`: Order submission logic
+  - `usePayment`, `useDiscount`, `useTransfer`, `useMerge`: Modal-specific operations
+- **Components** (`app/features/pos/components/`): UI components organized by feature
+  - Screen components: `UserSelectScreen`, `TableSelectScreen`, `OrderScreen`
+  - Modal components: `PinModal`, `PaymentModal`, `DiscountModal`, `TransferModal`, `MergeModal`
+  - OrderScreen sub-components: `CategoryTabs`, `ActionButtonBar`, `ProductGrid`, `CartSummary`
 
-**Rationale**: For this application's scope, React's built-in state management is sufficient. Adding Redux or Context API would introduce unnecessary complexity.
+**Rationale**: As the application grew, Context + useReducer provides predictable state updates while maintaining simplicity. Custom hooks encapsulate business logic, making components cleaner and more testable.
 
 **Pros**:
-- Simple and straightforward
-- No additional dependencies
-- Easy to understand data flow
+- Predictable state updates through reducer pattern
+- Business logic separated from UI components
+- Easier testing and maintenance
+- Clear separation of concerns
+- No prop drilling
 
 **Cons**:
-- State doesn't persist across component unmounts
-- Prop drilling may occur if component tree grows deeper
+- Slightly more boilerplate than raw useState
+- State doesn't persist across app restarts (intentional for POS security)
 
 ### User Authentication and Authorization
 
