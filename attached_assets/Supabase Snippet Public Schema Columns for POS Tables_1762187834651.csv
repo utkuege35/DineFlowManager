@@ -1,0 +1,33 @@
+table_name,column_name,data_type
+dining_areas,id,uuid
+dining_areas,name,text
+dining_areas,sort_order,integer
+dining_areas,created_at,timestamp with time zone
+product_categories,id,uuid
+product_categories,name,text
+product_categories,sort_order,integer
+product_categories,created_at,timestamp with time zone
+products,id,uuid
+products,name,text
+products,sell_price,numeric
+products,stock,numeric
+products,created_at,timestamp with time zone
+products,category_id,uuid
+restaurant_tables,id,uuid
+restaurant_tables,area_id,uuid
+restaurant_tables,number,integer
+restaurant_tables,name,text
+restaurant_tables,status,text
+restaurant_tables,opened_at,timestamp with time zone
+restaurant_tables,current_sale_id,uuid
+restaurant_tables,created_at,timestamp with time zone
+sale_items,id,uuid
+sale_items,sale_id,uuid
+sale_items,product_id,uuid
+sale_items,qty,numeric
+sale_items,unit_price,numeric
+sale_items,line_total,numeric
+sale_items,created_at,timestamp with time zone
+sales,id,uuid
+sales,created_at,timestamp with time zone
+sales,total_amount,numeric

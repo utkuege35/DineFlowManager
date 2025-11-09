@@ -1,0 +1,1540 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createClient } from '@supabase/supabase-js';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import 'react-native-url-polyfill/auto';
+
+type Category = { id: string; name: string };
+type Product = { id: string; name: string; sell_price: number | null; category_id: string | null };
+type Table = { 
+  id: string; 
+  number: number; 
+  name: string | null; 
+  area_id: string | null;
+  status: string | null;
+  current_sale_id: string | null;
+  merged_with_table_id?: string | null;
+  is_merged?: boolean;
+};
+type SaleItem = {
+  id: string;
+  product_id: string;
+  qty: number;
+  unit_price: number;
+  line_total: number;
+  discount_amount?: number;
+  discount_type?: string;
+  products: { name: string } | null;
+};
+type User = {
+  id: string;
+  name: string;
+  role: string;
+  pin?: string;
+};
+
+const SUPABASE_URL = 'https://rspxxmrzgktejmaxnmlz.supabase.co';
+const SUPABASE_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJzcHh4bXJ6Z2t0ZWptYXhubWx6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIwMDU0MjksImV4cCI6MjA3NzU4MTQyOX0.XZyV16QYerZiC_h4uVN48WFbRZxWg1ZU8cjKkEVHccM';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: { storage: AsyncStorage, autoRefreshToken: true, persistSession: true },
+});
+
+export default function OrderScreen() {
+  const [screen, setScreen] = useState<'user-select' | 'table-select' | 'order'>('user-select');
+    // Rapor ekranı state'leri
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportStartDate, setReportStartDate] = useState('');
+  const [reportEndDate, setReportEndDate] = useState('');
+  const [reportData, setReportData] = useState<any>(null);
+  const [selectedTable, setSelectedTable] = useState<Table | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  const [users, setUsers] = useState<User[]>([]);
+  const [tables, setTables] = useState<Table[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [activeCat, setActiveCat] = useState<string | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [orderItems, setOrderItems] = useState<Product[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+
+  const [existingSaleId, setExistingSaleId] = useState<string | null>(null);
+  const [existingItems, setExistingItems] = useState<SaleItem[]>([]);
+  const [loadingExisting, setLoadingExisting] = useState(false);
+  const [saleDiscount, setSaleDiscount] = useState<{ amount: number; type: string } | null>(null);
+
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [processingPayment, setProcessingPayment] = useState(false);
+
+  const [showDiscountModal, setShowDiscountModal] = useState(false);
+  const [discountTarget, setDiscountTarget] = useState<'sale' | 'item' | null>(null);
+  const [selectedItemForDiscount, setSelectedItemForDiscount] = useState<SaleItem | null>(null);
+  const [discountType, setDiscountType] = useState<'percentage' | 'amount'>('percentage');
+  const [discountValue, setDiscountValue] = useState('');
+
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferring, setTransferring] = useState(false);
+
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [selectedUserForPin, setSelectedUserForPin] = useState<User | null>(null);
+  const [pinInput, setPinInput] = useState('');
+
+  // Masa birleştirme
+  const [showMergeModal, setShowMergeModal] = useState(false);
+  const [mergingTables, setMergingTables] = useState(false);
+  const [selectedTablesForMerge, setSelectedTablesForMerge] = useState<string[]>([]);
+
+  const loadUsers = async () => {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, name, role, pin')
+      .eq('is_active', true)
+      .order('name', { ascending: true });
+
+    if (!error && data) {
+      setUsers(data as User[]);
+    }
+  };
+
+  const loadTables = async () => {
+    const { data, error } = await supabase
+      .from('restaurant_tables')
+      .select('id, number, name, area_id, status, current_sale_id, merged_with_table_id, is_merged')
+      .order('number', { ascending: true });
+
+    if (!error && data) {
+      setTables(data as Table[]);
+    }
+  };
+
+  const loadCategories = async () => {
+    const { data, error } = await supabase
+      .from('product_categories')
+      .select('id, name')
+      .order('sort_order', { ascending: true });
+
+    if (!error && data) {
+      setCategories(data as Category[]);
+      if (data.length > 0) setActiveCat(data[0].id);
+    }
+  };
+
+  const loadProducts = async (categoryId: string | null) => {
+    if (!categoryId) {
+      setProducts([]);
+      return;
+    }
+    const { data, error } = await supabase
+      .from('products')
+      .select('id, name, sell_price, category_id')
+      .eq('category_id', categoryId)
+      .order('name', { ascending: true });
+
+    if (!error && data) setProducts(data as Product[]);
+  };
+
+  const loadExistingSale = async (saleId: string) => {
+    setLoadingExisting(true);
+    try {
+      const { data: itemsData, error: itemsError } = await supabase
+        .from('sale_items')
+        .select('id, product_id, qty, unit_price, line_total, discount_amount, discount_type, products(name)')
+        .eq('sale_id', saleId);
+
+      if (!itemsError && itemsData) {
+        setExistingItems(itemsData as SaleItem[]);
+      }
+
+      const { data: saleData, error: saleError } = await supabase
+        .from('sales')
+        .select('discount_amount, discount_type')
+        .eq('id', saleId)
+        .single();
+
+      if (!saleError && saleData && saleData.discount_amount) {
+        setSaleDiscount({
+          amount: saleData.discount_amount,
+          type: saleData.discount_type || 'amount'
+        });
+      } else {
+        setSaleDiscount(null);
+      }
+    } catch (err) {
+      console.error('Mevcut sipariş yüklenemedi:', err);
+    } finally {
+      setLoadingExisting(false);
+    }
+  };
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  useEffect(() => {
+    if (screen === 'table-select') {
+      loadTables();
+      loadCategories();
+    }
+  }, [screen]);
+
+  useEffect(() => {
+    if (screen === 'order') {
+      loadProducts(activeCat);
+    }
+  }, [activeCat, screen]);
+
+  const selectUser = (user: User) => {
+    if (user.pin) {
+      setSelectedUserForPin(user);
+      setShowPinModal(true);
+    } else {
+      setCurrentUser(user);
+      setScreen('table-select');
+    }
+  };
+
+  const verifyPin = () => {
+    if (!selectedUserForPin) return;
+    
+    if (pinInput === selectedUserForPin.pin) {
+      setCurrentUser(selectedUserForPin);
+      setShowPinModal(false);
+      setPinInput('');
+      setScreen('table-select');
+    } else {
+      Alert.alert('Hata', 'Yanlış PIN kodu!');
+      setPinInput('');
+    }
+  };
+
+  const changeUser = () => {
+    Alert.alert(
+      'Kullanıcı Değiştir',
+      'Kullanıcı seçim ekranına dönmek istediğinize emin misiniz?',
+      [
+        { text: 'İptal', style: 'cancel' },
+        {
+          text: 'Evet',
+          onPress: () => {
+            setCurrentUser(null);
+            setSelectedTable(null);
+            setOrderItems([]);
+            setExistingItems([]);
+            setExistingSaleId(null);
+            setSaleDiscount(null);
+            setScreen('user-select');
+          }
+        }
+      ]
+    );
+  };
+
+  const selectTable = async (table: Table) => {
+    setSelectedTable(table);
+    setOrderItems([]);
+    
+    if (table.current_sale_id) {
+      setExistingSaleId(table.current_sale_id);
+      await loadExistingSale(table.current_sale_id);
+    } else {
+      setExistingSaleId(null);
+      setExistingItems([]);
+      setSaleDiscount(null);
+    }
+    
+    setScreen('order');
+  };
+
+  const addToOrder = (item: Product) => {
+    setOrderItems(prev => [...prev, item]);
+  };
+
+  const removeOne = (productId: string) => {
+    setOrderItems(prev => {
+      const idx = prev.findIndex(p => p.id === productId);
+      if (idx === -1) return prev;
+      const copy = [...prev];
+      copy.splice(idx, 1);
+      return copy;
+    });
+  };
+
+  const deleteExistingItem = (item: SaleItem) => {
+    Alert.alert(
+      'Ürün Sil',
+      `${item.products?.name || 'Bu ürün'} silinecek. Onaylıyor musunuz?`,
+      [
+        { text: 'İptal', style: 'cancel' },
+        {
+          text: 'Sil',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await supabase
+                .from('sale_items')
+                .delete()
+                .eq('id', item.id);
+
+              if (existingSaleId) {
+                await loadExistingSale(existingSaleId);
+                await recalculateSaleTotal(existingSaleId);
+              }
+
+              Alert.alert('Başarılı', 'Ürün silindi.');
+            } catch (err: any) {
+              Alert.alert('Hata', err.message || 'Ürün silinemedi.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const applyDiscountToSale = () => {
+    if (!existingSaleId) return;
+    setDiscountTarget('sale');
+    setSelectedItemForDiscount(null);
+    setShowDiscountModal(true);
+  };
+
+  const applyDiscountToItem = (item: SaleItem) => {
+    setDiscountTarget('item');
+    setSelectedItemForDiscount(item);
+    setShowDiscountModal(true);
+  };
+
+  const saveDiscount = async () => {
+    const value = parseFloat(discountValue);
+    if (isNaN(value) || value <= 0) {
+      Alert.alert('Hata', 'Geçerli bir indirim değeri girin.');
+      return;
+    }
+
+    try {
+      if (discountTarget === 'sale' && existingSaleId) {
+        await supabase
+          .from('sales')
+          .update({
+            discount_amount: value,
+            discount_type: discountType,
+          })
+          .eq('id', existingSaleId);
+
+        setSaleDiscount({ amount: value, type: discountType });
+        await recalculateSaleTotal(existingSaleId);
+        Alert.alert('Başarılı', 'İndirim uygulandı.');
+      } else if (discountTarget === 'item' && selectedItemForDiscount) {
+        await supabase
+          .from('sale_items')
+          .update({
+            discount_amount: value,
+            discount_type: discountType,
+          })
+          .eq('id', selectedItemForDiscount.id);
+
+        if (existingSaleId) {
+          await loadExistingSale(existingSaleId);
+          await recalculateSaleTotal(existingSaleId);
+        }
+        Alert.alert('Başarılı', 'İndirim uygulandı.');
+      }
+
+      setShowDiscountModal(false);
+      setDiscountValue('');
+    } catch (err: any) {
+      Alert.alert('Hata', err.message || 'İndirim uygulanamadı.');
+    }
+  };
+
+  const transferTable = async (targetTable: Table) => {
+    if (!existingSaleId || !selectedTable) return;
+    
+    if (targetTable.id === selectedTable.id) {
+      Alert.alert('Uyarı', 'Aynı masaya transfer yapamazsınız.');
+      return;
+    }
+
+    if (targetTable.current_sale_id) {
+      Alert.alert('Uyarı', 'Hedef masa dolu. Boş bir masa seçin.');
+      return;
+    }
+
+    Alert.alert(
+      'Masa Transfer',
+      `Masa ${selectedTable.number} → Masa ${targetTable.number}\n\nSiparişi transfer etmek istediğinize emin misiniz?`,
+      [
+        { text: 'İptal', style: 'cancel' },
+        {
+          text: 'Transfer Et',
+          onPress: async () => {
+            setTransferring(true);
+            try {
+              await supabase
+                .from('restaurant_tables')
+                .update({
+                  status: 'available',
+                  current_sale_id: null,
+                  opened_at: null,
+                })
+                .eq('id', selectedTable.id);
+
+              await supabase
+                .from('restaurant_tables')
+                .update({
+                  status: 'occupied',
+                  current_sale_id: existingSaleId,
+                  opened_at: new Date().toISOString(),
+                })
+                .eq('id', targetTable.id);
+
+              setShowTransferModal(false);
+              Alert.alert(
+                'Transfer Başarılı',
+                `Sipariş Masa ${targetTable.number}'e taşındı.`,
+                [
+                  {
+                    text: 'Tamam',
+                    onPress: () => {
+                      setOrderItems([]);
+                      setExistingItems([]);
+                      setExistingSaleId(null);
+                      setSaleDiscount(null);
+                      setSelectedTable(null);
+                      setScreen('table-select');
+                      loadTables();
+                    }
+                  }
+                ]
+              );
+
+            } catch (err: any) {
+              Alert.alert('Hata', err.message || 'Transfer başarısız.');
+            } finally {
+              setTransferring(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Masa birleştirme başlat
+  const startMerge = () => {
+    if (!existingSaleId) {
+      Alert.alert('Uyarı', 'Sadece açık siparişi olan masalar birleştirilebilir.');
+      return;
+    }
+    setSelectedTablesForMerge([]);
+    setShowMergeModal(true);
+  };
+
+  // Masa seçimi toggle
+  const toggleTableForMerge = (tableId: string) => {
+    setSelectedTablesForMerge(prev => {
+      if (prev.includes(tableId)) {
+        return prev.filter(id => id !== tableId);
+      } else {
+        return [...prev, tableId];
+      }
+    });
+  };
+
+  // Masa birleştirme işlemi
+  const mergeTables = async () => {
+    if (!selectedTable || !existingSaleId) return;
+    
+    if (selectedTablesForMerge.length === 0) {
+      Alert.alert('Uyarı', 'En az bir masa seçmelisiniz.');
+      return;
+    }
+
+    const mergeTableNumbers = tables
+      .filter(t => selectedTablesForMerge.includes(t.id))
+      .map(t => t.number)
+      .join(', ');
+
+    Alert.alert(
+      'Masa Birleştir',
+      `Masa ${mergeTableNumbers} → Masa ${selectedTable.number}\n\nSeçili masaları birleştirmek istediğinize emin misiniz?`,
+      [
+        { text: 'İptal', style: 'cancel' },
+        {
+          text: 'Birleştir',
+          onPress: async () => {
+            setMergingTables(true);
+            try {
+              // Seçili masaların siparişlerini ana masaya taşı
+              for (const tableId of selectedTablesForMerge) {
+                const mergeTable = tables.find(t => t.id === tableId);
+                if (!mergeTable || !mergeTable.current_sale_id) continue;
+
+                // Sipariş kalemlerini ana siparişe taşı
+                const { data: items } = await supabase
+                  .from('sale_items')
+                  .select('*')
+                  .eq('sale_id', mergeTable.current_sale_id);
+
+                if (items && items.length > 0) {
+                  // Yeni sipariş kalemleri oluştur
+                  const newItems = items.map(item => ({
+                    sale_id: existingSaleId,
+                    product_id: item.product_id,
+                    qty: item.qty,
+                    unit_price: item.unit_price,
+                    line_total: item.line_total,
+                    discount_amount: item.discount_amount,
+                    discount_type: item.discount_type,
+                  }));
+
+                  await supabase
+                    .from('sale_items')
+                    .insert(newItems);
+                }
+
+                // Eski siparişi kapat
+                await supabase
+                  .from('sales')
+                  .update({
+                    payment_status: 'merged',
+                    merged_from_sale_id: mergeTable.current_sale_id,
+                  })
+                  .eq('id', mergeTable.current_sale_id);
+
+                // Masayı güncelle
+                await supabase
+                  .from('restaurant_tables')
+                  .update({
+                    status: 'available',
+                    current_sale_id: null,
+                    opened_at: null,
+                    is_merged: true,
+                    merged_with_table_id: selectedTable.id,
+                  })
+                  .eq('id', tableId);
+              }
+
+              // Ana masanın toplamını yeniden hesapla
+              await recalculateSaleTotal(existingSaleId);
+              await loadExistingSale(existingSaleId);
+
+              setShowMergeModal(false);
+              setSelectedTablesForMerge([]);
+              
+              Alert.alert('Başarılı', `${selectedTablesForMerge.length} masa birleştirildi.`);
+
+            } catch (err: any) {
+              Alert.alert('Hata', err.message || 'Birleştirme başarısız.');
+            } finally {
+              setMergingTables(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const recalculateSaleTotal = async (saleId: string) => {
+    try {
+      const { data: items } = await supabase
+        .from('sale_items')
+        .select('line_total, discount_amount, discount_type')
+        .eq('sale_id', saleId);
+
+      if (!items) return;
+
+      let itemsTotal = 0;
+      for (const item of items) {
+        let itemTotal = item.line_total;
+        
+        if (item.discount_amount && item.discount_type) {
+          if (item.discount_type === 'percentage') {
+            itemTotal = itemTotal - (itemTotal * item.discount_amount / 100);
+          } else {
+            itemTotal = itemTotal - item.discount_amount;
+          }
+        }
+        
+        itemsTotal += itemTotal;
+      }
+
+      const { data: sale } = await supabase
+        .from('sales')
+        .select('discount_amount, discount_type')
+        .eq('id', saleId)
+        .single();
+
+      let finalAmount = itemsTotal;
+      if (sale?.discount_amount && sale?.discount_type) {
+        if (sale.discount_type === 'percentage') {
+          finalAmount = finalAmount - (finalAmount * sale.discount_amount / 100);
+        } else {
+          finalAmount = finalAmount - sale.discount_amount;
+        }
+      }
+
+      await supabase
+        .from('sales')
+        .update({
+          total_amount: itemsTotal,
+          final_amount: finalAmount,
+        })
+        .eq('id', saleId);
+
+    } catch (err) {
+      console.error('Toplam hesaplanamadı:', err);
+    }
+  };
+
+  const cart = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; unit: number; qty: number; line: number }>();
+    for (const p of orderItems) {
+      const unit = Number(p.sell_price ?? 0);
+      if (!map.has(p.id)) map.set(p.id, { id: p.id, name: p.name, unit, qty: 0, line: 0 });
+      const row = map.get(p.id)!;
+      row.qty += 1;
+      row.line = row.qty * unit;
+    }
+    return Array.from(map.values());
+  }, [orderItems]);
+
+  const newItemsTotal = useMemo(
+    () => cart.reduce((s, x) => s + x.line, 0),
+    [cart]
+  );
+
+  const existingTotal = useMemo(() => {
+    let total = 0;
+    for (const item of existingItems) {
+      let itemTotal = item.line_total;
+      
+      if (item.discount_amount && item.discount_type) {
+        if (item.discount_type === 'percentage') {
+          itemTotal = itemTotal - (itemTotal * item.discount_amount / 100);
+        } else {
+          itemTotal = itemTotal - item.discount_amount;
+        }
+      }
+      
+      total += itemTotal;
+    }
+    return total;
+  }, [existingItems]);
+
+  const grandTotal = useMemo(() => {
+    let total = existingTotal + newItemsTotal;
+    
+    if (saleDiscount) {
+      if (saleDiscount.type === 'percentage') {
+        total = total - (total * saleDiscount.amount / 100);
+      } else {
+        total = total - saleDiscount.amount;
+      }
+    }
+    
+    return Math.max(0, total);
+  }, [existingTotal, newItemsTotal, saleDiscount]);
+
+  const submitOrder = async () => {
+    if (!selectedTable || !currentUser) {
+      Alert.alert('Uyarı', 'Masa veya kullanıcı seçilmedi.');
+      return;
+    }
+
+    if (existingSaleId && orderItems.length === 0) {
+      Alert.alert('Uyarı', 'Yeni ürün eklenmedi.');
+      return;
+    }
+
+    if (!existingSaleId && orderItems.length === 0) {
+      Alert.alert('Uyarı', 'Sepet boş.');
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      let saleId = existingSaleId;
+
+      if (!saleId) {
+        const { data: saleData, error: saleError } = await supabase
+          .from('sales')
+          .insert({
+            total_amount: newItemsTotal,
+            final_amount: newItemsTotal,
+            created_at: new Date().toISOString(),
+            payment_status: 'pending',
+            is_paid: false,
+            user_id: currentUser.id,
+          })
+          .select('id')
+          .single();
+
+        if (saleError) throw saleError;
+        saleId = saleData.id;
+
+        await supabase
+          .from('restaurant_tables')
+          .update({
+            current_sale_id: saleId,
+            status: 'occupied',
+            opened_at: new Date().toISOString(),
+          })
+          .eq('id', selectedTable.id);
+      }
+
+      if (cart.length > 0) {
+        const items = cart.map(row => ({
+          sale_id: saleId,
+          product_id: row.id,
+          qty: row.qty,
+          unit_price: row.unit,
+          line_total: row.line,
+        }));
+
+        const { error: itemsError } = await supabase
+          .from('sale_items')
+          .insert(items);
+
+        if (itemsError) throw itemsError;
+      }
+
+      if (saleId) {
+        await recalculateSaleTotal(saleId);
+      }
+
+      Alert.alert(
+        'Başarılı', 
+        existingSaleId 
+          ? `Sipariş güncellendi!\nMasa: ${selectedTable.number}\nGarson: ${currentUser.name}`
+          : `Sipariş kaydedildi!\nMasa: ${selectedTable.number}\nGarson: ${currentUser.name}`
+      );
+
+      setOrderItems([]);
+      if (saleId) {
+        setExistingSaleId(saleId);
+        await loadExistingSale(saleId);
+      }
+
+    } catch (err: any) {
+      Alert.alert('Hata', err.message || 'Sipariş kaydedilemedi.');
+      console.error('Sipariş hatası:', err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handlePayment = async (paymentMethod: 'cash' | 'credit_card' | 'other') => {
+    if (!existingSaleId || !selectedTable) return;
+
+    setProcessingPayment(true);
+
+    try {
+      await supabase
+        .from('sales')
+        .update({
+          payment_method: paymentMethod,
+          payment_status: 'paid',
+          is_paid: true,
+          closed_at: new Date().toISOString(),
+        })
+        .eq('id', existingSaleId);
+
+      await supabase
+        .from('restaurant_tables')
+        .update({
+          status: 'available',
+          current_sale_id: null,
+          opened_at: null,
+        })
+        .eq('id', selectedTable.id);
+
+      setShowPaymentModal(false);
+      
+      Alert.alert(
+        'Ödeme Tamamlandı', 
+        `Masa ${selectedTable.number}\nToplam: ${grandTotal.toFixed(2)} TL\nÖdeme: ${
+          paymentMethod === 'cash' ? 'Nakit' : 
+          paymentMethod === 'credit_card' ? 'Kredi Kartı' : 'Diğer'
+        }`,
+        [
+          {
+            text: 'Tamam',
+            onPress: () => {
+              setOrderItems([]);
+              setExistingItems([]);
+              setExistingSaleId(null);
+              setSaleDiscount(null);
+              setSelectedTable(null);
+              setScreen('table-select');
+              loadTables();
+            }
+          }
+        ]
+      );
+
+    } catch (err: any) {
+      Alert.alert('Hata', err.message || 'Ödeme işlemi başarısız.');
+      console.error('Ödeme hatası:', err);
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
+
+  const changeTable = () => {
+  if (cart.length > 0) {
+    // Sepette kaydedilmemiş ürün varsa uyar
+    Alert.alert(
+      'Dikkat',
+      'Sepette kaydedilmemiş ürünler var. Yine de masa listesine dönmek istediğinize emin misiniz?',
+      [
+        { text: 'İptal', style: 'cancel' },
+        {
+          text: 'Evet, Dön',
+          style: 'destructive',
+          onPress: () => {
+            setOrderItems([]);
+            setExistingItems([]);
+            setExistingSaleId(null);
+            setSaleDiscount(null);
+            setSelectedTable(null);
+            setScreen('table-select');
+            loadTables();
+          }
+        }
+      ]
+    );
+  } else {
+    // Sepet boşsa direkt dön
+    setOrderItems([]);
+    setExistingItems([]);
+    setExistingSaleId(null);
+    setSaleDiscount(null);
+    setSelectedTable(null);
+    setScreen('table-select');
+    loadTables();
+  }
+};
+
+
+// ===== RAPOR FONKSİYONLARI =====
+const loadDailyReport = async (startDate: string, endDate: string) => {
+  if (!supabase) return null;
+
+  try {
+    // Tarih aralığındaki tamamlanmış satışları çek
+    const { data: sales, error } = await supabase
+      .from('sales')
+      .select(`
+        *,
+        sale_items (
+          *,
+          products (name, price)
+        ),
+        users (name),
+        restaurant_tables (number, name)
+      `)
+      .eq('status', 'closed')
+      .gte('closed_at', startDate)
+      .lte('closed_at', endDate);
+
+    if (error) throw error;
+
+    return sales;
+  } catch (err) {
+    console.error('Rapor yüklenirken hata:', err);
+    Alert.alert('Hata', 'Rapor yüklenemedi');
+    return null;
+  }
+};
+
+
+const generateReport = async () => {
+  if (!reportStartDate || !reportEndDate) {
+    Alert.alert('Uyarı', 'Lütfen başlangıç ve bitiş tarihi seçin');
+    return;
+  }
+
+  const sales = await loadDailyReport(reportStartDate, reportEndDate);
+  if (!sales || sales.length === 0) {
+    Alert.alert('Bilgi', 'Bu tarih aralığında satış bulunamadı');
+    setReportData(null);
+    return;
+  }
+
+  // Toplam satış hesapla
+  const totalSales = sales.reduce((sum: number, sale: any) => sum + parseFloat(sale.total_amount || 0), 0);
+  const totalOrders = sales.length;
+
+  // Ödeme yöntemleri dağılımı
+  const paymentMethods = sales.reduce((acc: any, sale: any) => {
+    const method = sale.payment_method || 'Belirtilmemiş';
+    acc[method] = (acc[method] || 0) + parseFloat(sale.total_amount || 0);
+    return acc;
+  }, {});
+
+  // Garson bazlı satışlar
+  const waiterSales = sales.reduce((acc: any, sale: any) => {
+    const waiterName = sale.users?.name || 'Belirtilmemiş';
+    if (!acc[waiterName]) {
+      acc[waiterName] = { total: 0, count: 0 };
+    }
+    acc[waiterName].total += parseFloat(sale.total_amount || 0);
+    acc[waiterName].count += 1;
+    return acc;
+  }, {});
+
+  // Masa bazlı satışlar
+  const tableSales = sales.reduce((acc: any, sale: any) => {
+    const tableInfo = sale.restaurant_tables 
+      ? `Masa ${sale.restaurant_tables.number}${sale.restaurant_tables.name ? ` (${sale.restaurant_tables.name})` : ''}`
+      : 'Belirtilmemiş';
+    if (!acc[tableInfo]) {
+      acc[tableInfo] = { total: 0, count: 0 };
+    }
+    acc[tableInfo].total += parseFloat(sale.total_amount || 0);
+    acc[tableInfo].count += 1;
+    return acc;
+  }, {});
+
+  // En çok satan ürünler
+  const productSales: any = {};
+  sales.forEach((sale: any) => {
+    sale.sale_items?.forEach((item: any) => {
+      const productName = item.products?.name || 'Bilinmeyen Ürün';
+      if (!productSales[productName]) {
+        productSales[productName] = { quantity: 0, total: 0 };
+      }
+      productSales[productName].quantity += item.quantity;
+      productSales[productName].total += parseFloat(item.total_price || 0);
+    });
+  });
+
+  const topProducts = Object.entries(productSales)
+    .map(([name, data]: [string, any]) => ({ name, ...data }))
+    .sort((a, b) => b.quantity - a.quantity)
+    .slice(0, 10);
+
+  // Ortalama hesap
+  const averageCheck = totalSales / totalOrders;
+
+  setReportData({
+    totalSales,
+    totalOrders,
+    paymentMethods,
+    waiterSales,
+    tableSales,
+    topProducts,
+    averageCheck,
+  });
+};
+
+  const isTableOccupied = (table: Table) => {
+    return table.status === 'occupied' || table.current_sale_id !== null;
+  };
+
+  const availableTables = useMemo(() => {
+    return tables.filter(t => !isTableOccupied(t) && t.id !== selectedTable?.id);
+  }, [tables, selectedTable]);
+
+  // Birleştirilecek masalar (açık siparişi olanlar, ana masa hariç)
+  const mergeableTables = useMemo(() => {
+    return tables.filter(t => 
+      t.id !== selectedTable?.id && 
+      isTableOccupied(t) && 
+      !t.is_merged
+    );
+  }, [tables, selectedTable]);
+
+  // ===== KULLANICI SEÇME EKRANI =====
+  if (screen === 'user-select') {
+    return (
+      <View style={{ flex: 1, padding: 16, marginTop: 40 }}>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 20 }}>
+          Kullanıcı Seçin
+        </Text>
+
+        <FlatList
+          data={users}
+          keyExtractor={(it) => it.id}
+          numColumns={2}
+          columnWrapperStyle={{ justifyContent: 'space-between' }}
+          renderItem={({ item }) => (
+            <Pressable
+              onPress={() => selectUser(item)}
+              style={{
+                backgroundColor: '#2196F3',
+                padding: 24,
+                borderRadius: 12,
+                marginBottom: 12,
+                width: '48%',
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>
+                {item.name}
+              </Text>
+              <Text style={{ color: '#fff', fontSize: 12, marginTop: 4, opacity: 0.9 }}>
+                {item.role === 'waiter' ? 'Garson' : item.role === 'manager' ? 'Müdür' : 'Admin'}
+              </Text>
+              {item.pin && (
+                <Text style={{ color: '#fff', fontSize: 10, marginTop: 4 }}>🔒 PIN Korumalı</Text>
+              )}
+            </Pressable>
+          )}
+          ListEmptyComponent={
+            <Text style={{ marginTop: 20, opacity: 0.6 }}>Kullanıcı bulunamadı.</Text>
+          }
+        />
+
+        {/* PIN Modal */}
+        <Modal
+          visible={showPinModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => {
+            setShowPinModal(false);
+            setPinInput('');
+          }}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ backgroundColor: '#fff', padding: 24, borderRadius: 16, width: '80%', maxWidth: 400 }}>
+              <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 8 }}>
+                PIN Kodu Girin
+              </Text>
+              <Text style={{ fontSize: 14, marginBottom: 20, color: '#666' }}>
+                {selectedUserForPin?.name}
+              </Text>
+
+              <TextInput
+                value={pinInput}
+                onChangeText={setPinInput}
+                keyboardType="number-pad"
+                secureTextEntry
+                placeholder="PIN"
+                placeholderTextColor="#999"
+                maxLength={4}
+                autoFocus
+                style={{
+                  borderWidth: 1,
+                  borderColor: '#ddd',
+                  borderRadius: 8,
+                  padding: 12,
+                  fontSize: 18,
+                  textAlign: 'center',
+                  marginBottom: 20,
+                  letterSpacing: 8,
+                }}
+              />
+
+              <Pressable
+                onPress={verifyPin}
+                style={{
+                  backgroundColor: '#4CAF50',
+                  padding: 14,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  marginBottom: 10,
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Giriş</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  setShowPinModal(false);
+                  setPinInput('');
+                }}
+                style={{
+                  padding: 12,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: '#666', fontWeight: '600' }}>İptal</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+      </View>
+    );
+  }
+
+  // ===== MASA SEÇME EKRANI =====
+  if (screen === 'table-select') {
+    return (
+      <View style={{ flex: 1, padding: 16, marginTop: 40 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <View>
+            <Text style={{ fontSize: 24, fontWeight: 'bold' }}>Masa Seçin</Text>
+            {currentUser && (
+              <Text style={{ fontSize: 14, color: '#666', marginTop: 4 }}>
+                Garson: {currentUser.name}
+              </Text>
+            )}
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Pressable onPress={changeUser} style={{ marginRight: 12 }}>
+              <Text style={{ color: '#FF9800', fontWeight: '600' }}>Kullanıcı Değiştir</Text>
+            </Pressable>
+            <Pressable onPress={loadTables}>
+              <Text style={{ color: '#007AFF', fontWeight: '600' }}>🔄 Yenile</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={{ flexDirection: 'row', marginBottom: 16 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 16 }}>
+            <View style={{ width: 16, height: 16, backgroundColor: '#4CAF50', borderRadius: 4, marginRight: 6 }} />
+            <Text style={{ fontSize: 12, opacity: 0.7 }}>Boş</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={{ width: 16, height: 16, backgroundColor: '#F44336', borderRadius: 4, marginRight: 6 }} />
+            <Text style={{ fontSize: 12, opacity: 0.7 }}>Dolu</Text>
+          </View>
+        </View>
+
+        <FlatList
+          key="tables-3-columns"
+          data={tables}
+          keyExtractor={(it) => it.id}
+          numColumns={3}
+          columnWrapperStyle={{ justifyContent: 'space-between' }}
+          renderItem={({ item }) => {
+            const occupied = isTableOccupied(item);
+            return (
+              <Pressable
+                onPress={() => selectTable(item)}
+                style={{
+                  backgroundColor: occupied ? '#F44336' : '#4CAF50',
+                  padding: 20,
+                  borderRadius: 12,
+                  marginBottom: 12,
+                  width: '31%',
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>
+                  {item.number}
+                </Text>
+                {item.name && (
+                  <Text style={{ color: '#fff', fontSize: 12, marginTop: 4 }}>
+                    {item.name}
+                  </Text>
+                )}
+                {occupied && (
+                  <Text style={{ color: '#fff', fontSize: 10, marginTop: 4, opacity: 0.9 }}>
+                    Dolu
+                  </Text>
+                )}
+              </Pressable>
+            );
+          }}
+          ListEmptyComponent={
+            <Text style={{ marginTop: 20, opacity: 0.6 }}>Masa bulunamadı.</Text>
+          }
+        />
+      </View>
+    );
+  }
+
+  // ===== SİPARİŞ EKRANI =====
+  const CatPill = ({ item }: { item: Category }) => (
+    <Pressable
+      onPress={() => setActiveCat(item.id)}
+      style={{
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        borderRadius: 18,
+        marginRight: 8,
+        backgroundColor: activeCat === item.id ? '#222' : '#eee',
+      }}
+    >
+      <Text style={{ color: activeCat === item.id ? '#fff' : '#000' }}>{item.name}</Text>
+    </Pressable>
+  );
+
+  return (
+    <View style={{ flex: 1, padding: 16, marginTop: 40 }}>
+      {/* Üst başlık */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+  <View style={{ flex: 1 }}>
+    <Text style={{ fontSize: 20, fontWeight: 'bold' }}>
+      Masa {selectedTable?.number} {selectedTable?.name ? `(${selectedTable.name})` : ''}
+    </Text>
+    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+      {currentUser && (
+        <Text style={{ fontSize: 12, color: '#666', marginRight: 12 }}>
+          Garson: {currentUser.name}
+        </Text>
+      )}
+      {existingSaleId && (
+        <Text style={{ fontSize: 12, color: '#F44336' }}>
+          Açık sipariş mevcut
+        </Text>
+      )}
+    </View>
+  </View>
+
+  {/* SAĞ ÜST BUTONLAR */}
+  <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+    {/* Ana Ekrana Dön Butonu - HER ZAMAN GÖRÜNÜR */}
+    <Pressable 
+      onPress={changeTable}
+      style={{ 
+        marginRight: 8, 
+        marginBottom: 6,
+        backgroundColor: '#2196F3', 
+        paddingHorizontal: 12, 
+        paddingVertical: 8, 
+        borderRadius: 6,
+        flexDirection: 'row',
+        alignItems: 'center',
+      }}
+    >
+      <Text style={{ color: '#fff', fontWeight: '600', fontSize: 12 }}>← Masa Listesi</Text>
+    </Pressable>
+
+    {/* DİĞER BUTONLAR - SADECE AÇIK SİPARİŞ VARSA */}
+    {existingSaleId && (
+      <>
+        <Pressable 
+          onPress={startMerge}
+          style={{ 
+            marginRight: 8, 
+            marginBottom: 6,
+            backgroundColor: '#673AB7', 
+            paddingHorizontal: 10, 
+            paddingVertical: 8, 
+            borderRadius: 6 
+          }}
+        >
+          <Text style={{ color: '#fff', fontWeight: '600', fontSize: 11 }}>🔗 Birleştir</Text>
+        </Pressable>
+        
+        <Pressable 
+          onPress={() => setShowTransferModal(true)}
+          style={{ 
+            marginRight: 8, 
+            marginBottom: 6,
+            backgroundColor: '#9C27B0', 
+            paddingHorizontal: 10, 
+            paddingVertical: 8, 
+            borderRadius: 6 
+          }}
+        >
+          <Text style={{ color: '#fff', fontWeight: '600', fontSize: 11 }}>↔️ Transfer</Text>
+        </Pressable>
+        
+        <Pressable 
+          onPress={applyDiscountToSale}
+          style={{ 
+            marginRight: 8, 
+            marginBottom: 6,
+            backgroundColor: '#FF9800', 
+            paddingHorizontal: 10, 
+            paddingVertical: 8, 
+            borderRadius: 6 
+          }}
+        >
+          <Text style={{ color: '#fff', fontWeight: '600', fontSize: 11 }}>% İndirim</Text>
+        </Pressable>
+        
+        <Pressable 
+          onPress={() => setShowPaymentModal(true)}
+          style={{ 
+            marginBottom: 6,
+            backgroundColor: '#4CAF50', 
+            paddingHorizontal: 10, 
+            paddingVertical: 8, 
+            borderRadius: 6 
+          }}
+        >
+          <Text style={{ color: '#fff', fontWeight: '600', fontSize: 11 }}>💳 Hesabı Kapat</Text>
+        </Pressable>
+      </>
+    )}
+  </View>
+</View>
+      {/* Kategoriler ve Ürünler - Aynı */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ marginBottom: 12 }}
+      >
+        {categories.map((c) => (
+          <CatPill key={c.id} item={c} />
+        ))}
+      </ScrollView>
+
+      <FlatList
+        key="products-2-columns"
+        data={products}
+        keyExtractor={(it) => it.id}
+        numColumns={2}
+        columnWrapperStyle={{ justifyContent: 'space-between' }}
+        renderItem={({ item }) => (
+          <Pressable
+            onPress={() => addToOrder(item)}
+            style={{
+              backgroundColor: '#f7f7f7',
+              padding: 14,
+              borderRadius: 10,
+              marginBottom: 12,
+              width: '48%',
+            }}
+          >
+            <Text style={{ fontWeight: '600' }}>{item.name}</Text>
+            <Text style={{ marginTop: 6 }}>{(item.sell_price ?? 0) + ' TL'}</Text>
+            <Text style={{ marginTop: 6, fontSize: 12, opacity: 0.6 }}>Sepete eklemek için dokun</Text>
+          </Pressable>
+        )}
+        ListEmptyComponent={
+          <Text style={{ marginTop: 20, opacity: 0.6 }}>Bu kategoride ürün yok.</Text>
+        }
+      />
+
+      {/* Alt sepet özeti - Aynı (önceki koddaki gibi) */}
+      <View style={{
+        position: 'absolute', left: 0, right: 0, bottom: 0,
+        backgroundColor: '#fff', borderTopWidth: 1, borderColor: '#eee',
+        padding: 12
+      }}>
+        {loadingExisting ? (
+          <ActivityIndicator size="small" color="#000" />
+        ) : existingItems.length > 0 ? (
+          <View style={{ marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#eee' }}>
+            <Text style={{ fontWeight: 'bold', marginBottom: 6, color: '#666' }}>Mevcut Sipariş:</Text>
+            <ScrollView style={{ maxHeight: 100 }}>
+              {existingItems.map(item => {
+                let itemTotal = item.line_total;
+                let hasDiscount = false;
+                
+                if (item.discount_amount && item.discount_type && item.discount_amount > 0) {
+                  hasDiscount = true;
+                  if (item.discount_type === 'percentage') {
+                    itemTotal = itemTotal - (itemTotal * item.discount_amount / 100);
+                  } else {
+                    itemTotal = itemTotal - item.discount_amount;
+                  }
+                }
+                
+                return (
+                  <View key={item.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 3 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, color: '#666' }}>
+                        {item.products?.name || 'Ürün'} x {item.qty}
+                      </Text>
+                      {hasDiscount && (
+                        <Text style={{ fontSize: 10, color: '#F44336' }}>
+                          İndirim: {item.discount_type === 'percentage' ? `%${item.discount_amount}` : `${item.discount_amount} TL`}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <View style={{ marginRight: 8 }}>
+                        {hasDiscount && (
+                          <Text style={{ fontSize: 11, color: '#999', textDecorationLine: 'line-through' }}>
+                            {item.line_total.toFixed(2)} TL
+                          </Text>
+                        )}
+                        <Text style={{ fontSize: 13, color: '#666' }}>
+                          {itemTotal.toFixed(2)} TL
+                        </Text>
+                      </View>
+                      <Pressable onPress={() => applyDiscountToItem(item)} style={{ marginRight: 4 }}>
+                        <Text style={{ color: '#FF9800', fontSize: 18 }}>%</Text>
+                      </Pressable>
+                      <Pressable onPress={() => deleteExistingItem(item)}>
+                        <Text style={{ color: '#d00', fontWeight: 'bold', fontSize: 18 }}>×</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+            <Text style={{ fontWeight: 'bold', marginTop: 4, color: '#666' }}>
+              Ara Toplam: {existingTotal.toFixed(2)} TL
+            </Text>
+          </View>
+        ) : null}
+
+        {cart.length > 0 ? (
+          <View style={{ marginBottom: 8 }}>
+            <Text style={{ fontWeight: 'bold', marginBottom: 6 }}>
+              {existingSaleId ? 'Yeni Eklenenler:' : 'Sepet:'}
+            </Text>
+            <ScrollView style={{ maxHeight: 100 }}>
+              {cart.map(row => (
+                <View key={row.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 }}>
+                  <Text>{row.name} x {row.qty}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={{ marginRight: 10 }}>{row.line.toFixed(2)} TL</Text>
+                    <Pressable onPress={() => removeOne(row.id)}>
+                      <Text style={{ color: '#d00', fontWeight: 'bold', fontSize: 20 }}>−</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        ) : !existingSaleId ? (
+          <Text style={{ opacity: 0.6, marginBottom: 8 }}>Sepet boş</Text>
+        ) : null}
+
+        {saleDiscount && saleDiscount.amount > 0 && (
+          <View style={{ marginBottom: 8, paddingVertical: 6, backgroundColor: '#FFF3E0', borderRadius: 6, paddingHorizontal: 8 }}>
+            <Text style={{ fontSize: 12, color: '#F57C00', fontWeight: 'bold' }}>
+              Sipariş İndirimi: {saleDiscount.type === 'percentage' ? `%${saleDiscount.amount}` : `${saleDiscount.amount} TL`}
+            </Text>
+          </View>
+        )}
+
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View>
+            {existingSaleId && cart.length > 0 && (
+              <Text style={{ fontSize: 12, color: '#666' }}>
+                Yeni: {newItemsTotal.toFixed(2)} TL
+              </Text>
+            )}
+            <Text style={{ fontWeight: 'bold', fontSize: 16 }}>
+              Toplam: {grandTotal.toFixed(2)} TL
+            </Text>
+          </View>
+          <Pressable
+            onPress={submitOrder}
+            disabled={submitting}
+            style={{
+              backgroundColor: submitting ? '#999' : '#222',
+              paddingVertical: 10,
+              paddingHorizontal: 16,
+              borderRadius: 8,
+              flexDirection: 'row',
+              alignItems: 'center',
+            }}
+          >
+            {submitting && <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />}
+            <Text style={{ color: '#fff', fontWeight: 'bold' }}>
+              {submitting ? 'Gönderiliyor...' : existingSaleId ? 'Siparişi Güncelle' : 'Siparişi Gönder'}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Masa Birleştirme Modal */}
+      <Modal
+        visible={showMergeModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowMergeModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: '#fff', padding: 24, borderRadius: 16, width: '90%', maxWidth: 500, maxHeight: '80%' }}>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 8 }}>
+              Masa Birleştir
+            </Text>
+            <Text style={{ fontSize: 14, marginBottom: 16, color: '#666' }}>
+              Masa {selectedTable?.number} ile birleştirilecek masaları seçin
+            </Text>
+
+            {mergeableTables.length === 0 ? (
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <Text style={{ color: '#666', marginBottom: 16 }}>Birleştirilecek dolu masa yok.</Text>
+                <Pressable
+                  onPress={() => setShowMergeModal(false)}
+                  style={{
+                    padding: 12,
+                    backgroundColor: '#eee',
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text style={{ color: '#666', fontWeight: '600' }}>Kapat</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <>
+                <ScrollView style={{ maxHeight: 400 }}>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                    {mergeableTables.map((table) => {
+                      const isSelected = selectedTablesForMerge.includes(table.id);
+                      return (
+                        <Pressable
+                          key={table.id}
+                          onPress={() => toggleTableForMerge(table.id)}
+                          disabled={mergingTables}
+                          style={{
+                            backgroundColor: isSelected ? '#673AB7' : '#F44336',
+                            padding: 20,
+                            borderRadius: 12,
+                            marginBottom: 12,
+                            width: '30%',
+                            alignItems: 'center',
+                            borderWidth: isSelected ? 3 : 0,
+                            borderColor: '#fff',
+                          }}
+                        >
+                          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>
+                            {table.number}
+                          </Text>
+                          {table.name && (
+                            <Text style={{ color: '#fff', fontSize: 12, marginTop: 4 }}>
+                              {table.name}
+                            </Text>
+                          )}
+                          {isSelected && (
+                            <Text style={{ color: '#fff', fontSize: 10, marginTop: 4 }}>✓ Seçildi</Text>
+                          )}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+
+                <Text style={{ fontSize: 12, color: '#666', marginTop: 12, marginBottom: 16 }}>
+                  {selectedTablesForMerge.length} masa seçildi
+                </Text>
+
+                <Pressable
+                  onPress={mergeTables}
+                  disabled={mergingTables || selectedTablesForMerge.length === 0}
+                  style={{
+                    backgroundColor: mergingTables || selectedTablesForMerge.length === 0 ? '#999' : '#4CAF50',
+                    padding: 14,
+                    borderRadius: 8,
+                    alignItems: 'center',
+                    marginBottom: 10,
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>
+                    {mergingTables ? 'Birleştiriliyor...' : 'Masaları Birleştir'}
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    setShowMergeModal(false);
+                    setSelectedTablesForMerge([]);
+                  }}
+                  disabled={mergingTables}
+                  style={{
+                    padding: 12,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ color: '#666', fontWeight: '600' }}>İptal</Text>
+                </Pressable>
+
+                {mergingTables && (
+                  <View style={{ marginTop: 16, alignItems: 'center' }}>
+                    <ActivityIndicator size="small" color="#000" />
+                  </View>
+                )}
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Ödeme, İndirim ve Transfer modalleri - Önceki koddaki gibi ekleyin */}
+    </View>
+  );
+}

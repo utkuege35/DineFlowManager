@@ -1,0 +1,200 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createClient } from '@supabase/supabase-js';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Alert, FlatList, Pressable, ScrollView, Text, View } from 'react-native';
+import 'react-native-url-polyfill/auto';
+
+type Category = { id: string; name: string };
+type Product = { id: string; name: string; sell_price: number | null; category_id: string | null };
+
+const SUPABASE_URL = 'https://rspxxmrzgktejmaxnmlz.supabase.co';
+const SUPABASE_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJzcHh4bXJ6Z2t0ZWptYXhubWx6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIwMDU0MjksImV4cCI6MjA3NzU4MTQyOX0.XZyV16QYerZiC_h4uVN48WFbRZxWg1ZU8cjKkEVHccM';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: { storage: AsyncStorage, autoRefreshToken: true, persistSession: true },
+});
+
+export default function OrderScreen() {
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [activeCat, setActiveCat] = useState<string | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
+
+  // Sepet (geçici/yerel)
+  const [orderItems, setOrderItems] = useState<Product[]>([]);
+
+  // Kategorileri çek
+  const loadCategories = async () => {
+    const { data, error } = await supabase
+      .from('product_categories')
+      .select('id, name')
+      .order('sort_order', { ascending: true });
+
+    if (!error && data) {
+      setCategories(data as Category[]);
+      if (data.length > 0) setActiveCat(data[0].id);
+    }
+  };
+
+  // Ürünleri çek
+  const loadProducts = async (categoryId: string | null) => {
+    if (!categoryId) {
+      setProducts([]);
+      return;
+    }
+    const { data, error } = await supabase
+      .from('products')
+      .select('id, name, sell_price, category_id')
+      .eq('category_id', categoryId)
+      .order('name', { ascending: true });
+
+    if (!error && data) setProducts(data as Product[]);
+  };
+
+  useEffect(() => {
+    loadCategories();
+  }, []);
+
+  useEffect(() => {
+    loadProducts(activeCat);
+  }, [activeCat]);
+
+  // Sepete ekle
+  const addToOrder = (item: Product) => {
+    setOrderItems(prev => [...prev, item]);
+  };
+
+  // Sepetten bir adet eksilt
+  const removeOne = (productId: string) => {
+    setOrderItems(prev => {
+      const idx = prev.findIndex(p => p.id === productId);
+      if (idx === -1) return prev;
+      const copy = [...prev];
+      copy.splice(idx, 1);
+      return copy;
+    });
+  };
+
+  // Sepeti özetle (ürün bazında adet ve ara toplam)
+  const cart = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; unit: number; qty: number; line: number }>();
+    for (const p of orderItems) {
+      const unit = Number(p.sell_price ?? 0);
+      if (!map.has(p.id)) map.set(p.id, { id: p.id, name: p.name, unit, qty: 0, line: 0 });
+      const row = map.get(p.id)!;
+      row.qty += 1;
+      row.line = row.qty * unit;
+    }
+    return Array.from(map.values());
+  }, [orderItems]);
+
+  const total = useMemo(
+    () => cart.reduce((s, x) => s + x.line, 0),
+    [cart]
+  );
+
+  const CatPill = ({ item }: { item: Category }) => (
+    <Pressable
+      onPress={() => setActiveCat(item.id)}
+      style={{
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        borderRadius: 18,
+        marginRight: 8,
+        backgroundColor: activeCat === item.id ? '#222' : '#eee',
+      }}
+    >
+      <Text style={{ color: activeCat === item.id ? '#fff' : '#000' }}>{item.name}</Text>
+    </Pressable>
+  );
+
+  const submitOrder = () => {
+    if (orderItems.length === 0) {
+      Alert.alert('Uyarı', 'Sepet boş.');
+      return;
+    }
+    Alert.alert('Sipariş', `Toplam ${orderItems.length} kalem, ${total} TL (şimdilik yerelde).`);
+    // Bir sonraki adımda: Supabase'e yazacağız (sales + sale_items).
+  };
+
+  return (
+    <View style={{ flex: 1, padding: 16, marginTop: 40 }}>
+      <Text style={{ fontSize: 20, fontWeight: 'bold' }}>Sipariş</Text>
+
+      {/* Kategoriler */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ marginTop: 16, marginBottom: 12 }}
+      >
+        {categories.map((c) => (
+          <CatPill key={c.id} item={c} />
+        ))}
+      </ScrollView>
+
+      {/* Ürünler */}
+      <FlatList
+        data={products}
+        keyExtractor={(it) => it.id}
+        numColumns={2}
+        columnWrapperStyle={{ justifyContent: 'space-between' }}
+        renderItem={({ item }) => (
+          <Pressable
+            onPress={() => addToOrder(item)}
+            style={{
+              backgroundColor: '#f7f7f7',
+              padding: 14,
+              borderRadius: 10,
+              marginBottom: 12,
+              width: '48%',
+            }}
+          >
+            <Text style={{ fontWeight: '600' }}>{item.name}</Text>
+            <Text style={{ marginTop: 6 }}>{(item.sell_price ?? 0) + ' TL'}</Text>
+            <Text style={{ marginTop: 6, fontSize: 12, opacity: 0.6 }}>Sepete eklemek için dokun</Text>
+          </Pressable>
+        )}
+        ListEmptyComponent={
+          <Text style={{ marginTop: 20, opacity: 0.6 }}>Bu kategoride ürün yok.</Text>
+        }
+      />
+
+      {/* Alt sepet özeti */}
+      <View style={{
+        position: 'absolute', left: 0, right: 0, bottom: 0,
+        backgroundColor: '#fff', borderTopWidth: 1, borderColor: '#eee',
+        padding: 12
+      }}>
+        {/* Satır: sepet listesi */}
+        {cart.length > 0 ? (
+          <View style={{ marginBottom: 8 }}>
+            {cart.map(row => (
+              <View key={row.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 }}>
+                <Text>{row.name} x {row.qty}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Text>{row.line} TL</Text>
+                  <Pressable onPress={() => removeOne(row.id)}>
+                    <Text style={{ color: '#d00', fontWeight: 'bold' }}>−1</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <Text style={{ opacity: 0.6, marginBottom: 8 }}>Sepet boş</Text>
+        )}
+
+        {/* Satır: toplam + gönder */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={{ fontWeight: 'bold' }}>Toplam: {total} TL</Text>
+          <Pressable
+            onPress={submitOrder}
+            style={{ backgroundColor: '#222', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8 }}
+          >
+            <Text style={{ color: '#fff', fontWeight: 'bold' }}>Siparişi Gönder</Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
