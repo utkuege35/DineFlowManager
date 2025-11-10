@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { ReactNode } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, Pressable } from 'react-native';
 import { SaleItem, SaleDiscount } from '../../types';
 
@@ -11,6 +11,7 @@ type Props = {
   onDeleteExistingItem: (item: SaleItem) => void;
   onDiscountExistingItem: (item: SaleItem) => void;
   onRemoveCartItem: (productId: string) => void;
+  actionButtons?: ReactNode;
 };
 
 export function CartSummary({
@@ -22,6 +23,7 @@ export function CartSummary({
   onDeleteExistingItem,
   onDiscountExistingItem,
   onRemoveCartItem,
+  actionButtons,
 }: Props) {
   return (
     <View style={{
@@ -123,10 +125,16 @@ export function CartSummary({
         </View>
       )}
 
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 8 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 8, marginBottom: actionButtons ? 12 : 0 }}>
         <Text style={{ fontSize: 16, fontWeight: 'bold' }}>Toplam:</Text>
         <Text style={{ fontSize: 16, fontWeight: 'bold' }}>{grandTotal.toFixed(2)} TL</Text>
       </View>
+
+      {actionButtons && (
+        <View style={{ borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 8 }}>
+          {actionButtons}
+        </View>
+      )}
     </View>
   );
 }
