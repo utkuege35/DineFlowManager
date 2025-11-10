@@ -21,13 +21,13 @@ import { Table } from '../../types';
 
 const showAlert = (title: string, message?: string, onConfirm?: () => void) => {
   if (Platform.OS === 'web') {
-    const fullMessage = message ? `${title}\n\n${message}` : title;
+    const displayMessage = message || title;
     if (onConfirm) {
-      if (window.confirm(fullMessage)) {
+      if (window.confirm(displayMessage)) {
         onConfirm();
       }
     } else {
-      window.alert(fullMessage);
+      window.alert(displayMessage);
     }
   } else {
     if (onConfirm) {
