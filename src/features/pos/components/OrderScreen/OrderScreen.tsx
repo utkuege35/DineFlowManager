@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, Alert, Platform } from 'react-native';
 import { usePosContext } from '../../state/PosProvider';
 import { useCategoriesProducts } from '../../hooks/useCategoriesProducts';
@@ -16,32 +16,47 @@ import { PaymentModal } from './modals/PaymentModal';
 import { DiscountModal } from './modals/DiscountModal';
 import { TransferModal } from './modals/TransferModal';
 import { MergeModal } from './modals/MergeModal';
+import { ConfirmDialog } from '../ConfirmDialog';
 import { supabase } from '@/lib/supabase';
 import { Table } from '../../types';
 
-const showAlert = (title: string, message?: string, onConfirm?: () => void) => {
-  if (Platform.OS === 'web') {
-    const displayMessage = message || title;
-    if (onConfirm) {
-      if (window.confirm(displayMessage)) {
-        onConfirm();
-      }
-    } else {
-      window.alert(displayMessage);
-    }
-  } else {
-    if (onConfirm) {
-      Alert.alert(title, message, [
-        { text: 'İptal', style: 'cancel' },
-        { text: 'Tamam', onPress: onConfirm }
-      ]);
-    } else {
-      Alert.alert(title, message);
-    }
-  }
-};
-
 export function OrderScreen() {
+  const [confirmDialog, setConfirmDialog] = useState<{
+    visible: boolean;
+    title?: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  const showAlert = (title: string, message?: string, onConfirm?: () => void) => {
+    if (Platform.OS === 'web') {
+      setConfirmDialog({
+        visible: true,
+        title,
+        message: message || title,
+        onConfirm: () => {
+          setConfirmDialog(prev => ({ ...prev, visible: false }));
+          if (onConfirm) {
+            onConfirm();
+          }
+        },
+      });
+    } else {
+      if (onConfirm) {
+        Alert.alert(title, message, [
+          { text: 'İptal', style: 'cancel' },
+          { text: 'Tamam', onPress: onConfirm }
+        ]);
+      } else {
+        Alert.alert(title, message);
+      }
+    }
+  };
   const { state, dispatch } = usePosContext();
   const { categories, activeCat, products, loadCategories, setActiveCat } = useCategoriesProducts();
   const { loadExistingSale, deleteExistingItem, recalculateSaleTotal, loading: loadingExisting } = useExistingSale();
@@ -377,6 +392,14 @@ export function OrderScreen() {
           dispatch({ type: 'SHOW_MODAL', payload: { modal: 'Merge', show: false } });
           dispatch({ type: 'CLEAR_MERGE_SELECTION' });
         }}
+      />
+
+      <ConfirmDialog
+        visible={confirmDialog.visible}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, visible: false }))}
       />
     </View>
   );
