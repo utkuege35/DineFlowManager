@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo } from 'react';
-import { View, Text, Pressable, Alert } from 'react-native';
+import { View, Text, Pressable, Alert, Platform } from 'react-native';
 import { usePosContext } from '../../state/PosProvider';
 import { useCategoriesProducts } from '../../hooks/useCategoriesProducts';
 import { useExistingSale } from '../../hooks/useExistingSale';
@@ -18,6 +18,28 @@ import { TransferModal } from './modals/TransferModal';
 import { MergeModal } from './modals/MergeModal';
 import { supabase } from '@/lib/supabase';
 import { Table } from '../../types';
+
+const showAlert = (title: string, message?: string, onConfirm?: () => void) => {
+  if (Platform.OS === 'web') {
+    const fullMessage = message ? `${title}\n\n${message}` : title;
+    if (onConfirm) {
+      if (window.confirm(fullMessage)) {
+        onConfirm();
+      }
+    } else {
+      window.alert(fullMessage);
+    }
+  } else {
+    if (onConfirm) {
+      Alert.alert(title, message, [
+        { text: 'İptal', style: 'cancel' },
+        { text: 'Tamam', onPress: onConfirm }
+      ]);
+    } else {
+      Alert.alert(title, message);
+    }
+  }
+};
 
 export function OrderScreen() {
   const { state, dispatch } = usePosContext();
@@ -97,24 +119,17 @@ export function OrderScreen() {
   };
 
   const handleDeleteExistingItem = async (item: any) => {
-    Alert.alert(
+    showAlert(
       'Ürün Sil',
       `${item.products?.name || 'Bu ürün'} silinecek. Onaylıyor musunuz?`,
-      [
-        { text: 'İptal', style: 'cancel' },
-        {
-          text: 'Sil',
-          style: 'destructive',
-          onPress: async () => {
-            const success = await deleteExistingItem(item.id);
-            if (success && state.existingSaleId) {
-              await recalculateSaleTotal(state.existingSaleId);
-              const { items, discount } = await loadExistingSale(state.existingSaleId);
-              dispatch({ type: 'SET_EXISTING_SALE', payload: { saleId: state.existingSaleId, items } });
-            }
-          }
+      async () => {
+        const success = await deleteExistingItem(item.id);
+        if (success && state.existingSaleId) {
+          await recalculateSaleTotal(state.existingSaleId);
+          const { items, discount } = await loadExistingSale(state.existingSaleId);
+          dispatch({ type: 'SET_EXISTING_SALE', payload: { saleId: state.existingSaleId, items } });
         }
-      ]
+      }
     );
   };
 
@@ -122,7 +137,7 @@ export function OrderScreen() {
     if (!state.selectedTable || !state.existingSaleId) return;
 
     if (state.selectedTablesForMerge.length === 0) {
-      Alert.alert('Uyarı', 'En az bir masa seçmelisiniz.');
+      showAlert('Uyarı', 'En az bir masa seçmelisiniz.');
       return;
     }
 
@@ -131,14 +146,10 @@ export function OrderScreen() {
       .map(t => t.number)
       .join(', ');
 
-    Alert.alert(
+    showAlert(
       'Masa Birleştir',
       `Masa ${mergeTableNumbers} → Masa ${state.selectedTable.number}\n\nSeçili masaları birleştirmek istediğinize emin misiniz?`,
-      [
-        { text: 'İptal', style: 'cancel' },
-        {
-          text: 'Birleştir',
-          onPress: async () => {
+      async () => {
             try {
               for (const tableId of state.selectedTablesForMerge) {
                 const mergeTable = tables.find(t => t.id === tableId);
@@ -188,16 +199,14 @@ export function OrderScreen() {
               dispatch({ type: 'SET_EXISTING_SALE', payload: { saleId: state.existingSaleId, items } });
               dispatch({ type: 'SET_SALE_DISCOUNT', payload: discount });
 
-              dispatch({ type: 'SHOW_MODAL', payload: { modal: 'Merge', show: false } });
-              dispatch({ type: 'CLEAR_MERGE_SELECTION' });
+            dispatch({ type: 'SHOW_MODAL', payload: { modal: 'Merge', show: false } });
+            dispatch({ type: 'CLEAR_MERGE_SELECTION' });
 
-              Alert.alert('Başarılı', `${state.selectedTablesForMerge.length} masa birleştirildi.`);
-            } catch (err: any) {
-              Alert.alert('Hata', err.message || 'Birleştirme başarısız.');
-            }
+            showAlert('Başarılı', `${state.selectedTablesForMerge.length} masa birleştirildi.`);
+          } catch (err: any) {
+            showAlert('Hata', err.message || 'Birleştirme başarısız.');
           }
-        }
-      ]
+      }
     );
   };
 
@@ -205,23 +214,19 @@ export function OrderScreen() {
     if (!state.existingSaleId || !state.selectedTable) return;
 
     if (targetTable.id === state.selectedTable.id) {
-      Alert.alert('Uyarı', 'Aynı masaya transfer yapamazsınız.');
+      showAlert('Uyarı', 'Aynı masaya transfer yapamazsınız.');
       return;
     }
 
     if (targetTable.current_sale_id) {
-      Alert.alert('Uyarı', 'Hedef masa dolu. Boş bir masa seçin.');
+      showAlert('Uyarı', 'Hedef masa dolu. Boş bir masa seçin.');
       return;
     }
 
-    Alert.alert(
+    showAlert(
       'Masa Transfer',
       `Masa ${state.selectedTable.number} → Masa ${targetTable.number}\n\nSiparişi transfer etmek istediğinize emin misiniz?`,
-      [
-        { text: 'İptal', style: 'cancel' },
-        {
-          text: 'Transfer Et',
-          onPress: async () => {
+      async () => {
             try {
               await supabase
                 .from('restaurant_tables')
@@ -241,26 +246,19 @@ export function OrderScreen() {
                 })
                 .eq('id', targetTable.id);
 
-              dispatch({ type: 'SHOW_MODAL', payload: { modal: 'Transfer', show: false } });
-              Alert.alert(
-                'Transfer Başarılı',
-                `Sipariş Masa ${targetTable.number}'e taşındı.`,
-                [
-                  {
-                    text: 'Tamam',
-                    onPress: () => {
-                      dispatch({ type: 'RESET_TO_TABLE_SELECT' });
-                      loadTables();
-                    }
-                  }
-                ]
-              );
-            } catch (err: any) {
-              Alert.alert('Hata', err.message || 'Transfer başarısız.');
-            }
+            dispatch({ type: 'SHOW_MODAL', payload: { modal: 'Transfer', show: false } });
+            showAlert(
+              'Transfer Başarılı',
+              `Sipariş Masa ${targetTable.number}'e taşındı.`,
+              () => {
+                dispatch({ type: 'RESET_TO_TABLE_SELECT' });
+                loadTables();
+              }
+            );
+          } catch (err: any) {
+            showAlert('Hata', err.message || 'Transfer başarısız.');
           }
-        }
-      ]
+      }
     );
   };
 
@@ -316,7 +314,7 @@ export function OrderScreen() {
                 onSubmit={handleSubmit}
                 onMerge={() => {
                   if (!state.existingSaleId) {
-                    Alert.alert('Uyarı', 'Sadece açık siparişi olan masalar birleştirilebilir.');
+                    showAlert('Uyarı', 'Sadece açık siparişi olan masalar birleştirilebilir.');
                     return;
                   }
                   loadTables();

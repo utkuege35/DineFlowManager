@@ -76,11 +76,8 @@ export function CartSummary({
                       <Text style={{ fontSize: 18 }}>%</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      onPress={() => {
-                        console.log('Delete button pressed for item:', item.id);
-                        onDeleteExistingItem(item);
-                      }}
-                      style={{ padding: 8, backgroundColor: 'rgba(255,0,0,0.1)' }}
+                      onPress={() => onDeleteExistingItem(item)}
+                      style={{ padding: 8 }}
                       activeOpacity={0.5}
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
