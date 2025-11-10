@@ -1,5 +1,5 @@
 import React, { ReactNode } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, Pressable } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, Pressable, FlatList } from 'react-native';
 import { SaleItem, SaleDiscount } from '../../types';
 
 type Props = {
@@ -26,18 +26,19 @@ export function CartSummary({
   actionButtons,
 }: Props) {
   return (
-    <View style={{
+    <ScrollView style={{
       backgroundColor: '#fff',
       borderTopWidth: 1,
       borderColor: '#eee',
-      padding: 12
-    }}>
+    }}
+    contentContainerStyle={{ padding: 12 }}
+    >
       {loading ? (
         <ActivityIndicator size="small" color="#000" />
       ) : existingItems.length > 0 ? (
         <View style={{ marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#eee' }}>
           <Text style={{ fontWeight: 'bold', marginBottom: 6, color: '#666' }}>Mevcut Sipariş:</Text>
-          <ScrollView style={{ maxHeight: 100 }}>
+          <View>
             {existingItems.map(item => {
               let itemTotal = item.line_total;
               let hasDiscount = false;
@@ -83,14 +84,14 @@ export function CartSummary({
                 </View>
               );
             })}
-          </ScrollView>
+          </View>
         </View>
       ) : null}
 
       {cartItems.length > 0 && (
         <View style={{ marginBottom: 12 }}>
           <Text style={{ fontWeight: 'bold', marginBottom: 6, color: '#666' }}>Yeni Eklemeler:</Text>
-          <ScrollView style={{ maxHeight: 80 }}>
+          <View>
             {cartItems.map((row) => (
               <View key={row.id} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                 <Text style={{ flex: 1, fontSize: 13 }}>
@@ -109,7 +110,7 @@ export function CartSummary({
                 </View>
               </View>
             ))}
-          </ScrollView>
+          </View>
         </View>
       )}
 
@@ -131,6 +132,6 @@ export function CartSummary({
           {actionButtons}
         </View>
       )}
-    </View>
+    </ScrollView>
   );
 }

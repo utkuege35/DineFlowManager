@@ -290,47 +290,53 @@ export function OrderScreen() {
         />
       </View>
 
-      <ProductGrid
-        products={products}
-        onAddProduct={(product) => dispatch({ type: 'ADD_ORDER_ITEM', payload: product })}
-      />
-
-      <CartSummary
-        loading={loadingExisting}
-        existingItems={state.existingItems}
-        cartItems={cart}
-        saleDiscount={state.saleDiscount}
-        grandTotal={grandTotal}
-        onDeleteExistingItem={handleDeleteExistingItem}
-        onDiscountExistingItem={(item) => {
-          dispatch({ type: 'SET_DISCOUNT_MODAL_DATA', payload: { target: 'item', item } });
-        }}
-        onRemoveCartItem={(productId) => dispatch({ type: 'REMOVE_ORDER_ITEM', payload: productId })}
-        actionButtons={
-          <ActionButtonBar
-            submitting={submitting}
-            onSubmit={handleSubmit}
-            onMerge={() => {
-              if (!state.existingSaleId) {
-                Alert.alert('Uyarı', 'Sadece açık siparişi olan masalar birleştirilebilir.');
-                return;
-              }
-              loadTables();
-              dispatch({ type: 'CLEAR_MERGE_SELECTION' });
-              dispatch({ type: 'SHOW_MODAL', payload: { modal: 'Merge', show: true } });
-            }}
-            onTransfer={() => {
-              loadTables();
-              dispatch({ type: 'SHOW_MODAL', payload: { modal: 'Transfer', show: true } });
-            }}
-            onDiscount={() => {
-              if (!state.existingSaleId) return;
-              dispatch({ type: 'SET_DISCOUNT_MODAL_DATA', payload: { target: 'sale' } });
-            }}
-            onPayment={() => dispatch({ type: 'SHOW_MODAL', payload: { modal: 'Payment', show: true } })}
+      <View style={{ flex: 1, flexDirection: 'column' }}>
+        <View style={{ maxHeight: 160 }}>
+          <ProductGrid
+            products={products}
+            onAddProduct={(product) => dispatch({ type: 'ADD_ORDER_ITEM', payload: product })}
           />
-        }
-      />
+        </View>
+
+        <View style={{ flex: 1 }}>
+          <CartSummary
+            loading={loadingExisting}
+            existingItems={state.existingItems}
+            cartItems={cart}
+            saleDiscount={state.saleDiscount}
+            grandTotal={grandTotal}
+            onDeleteExistingItem={handleDeleteExistingItem}
+            onDiscountExistingItem={(item) => {
+              dispatch({ type: 'SET_DISCOUNT_MODAL_DATA', payload: { target: 'item', item } });
+            }}
+            onRemoveCartItem={(productId) => dispatch({ type: 'REMOVE_ORDER_ITEM', payload: productId })}
+            actionButtons={
+              <ActionButtonBar
+                submitting={submitting}
+                onSubmit={handleSubmit}
+                onMerge={() => {
+                  if (!state.existingSaleId) {
+                    Alert.alert('Uyarı', 'Sadece açık siparişi olan masalar birleştirilebilir.');
+                    return;
+                  }
+                  loadTables();
+                  dispatch({ type: 'CLEAR_MERGE_SELECTION' });
+                  dispatch({ type: 'SHOW_MODAL', payload: { modal: 'Merge', show: true } });
+                }}
+                onTransfer={() => {
+                  loadTables();
+                  dispatch({ type: 'SHOW_MODAL', payload: { modal: 'Transfer', show: true } });
+                }}
+                onDiscount={() => {
+                  if (!state.existingSaleId) return;
+                  dispatch({ type: 'SET_DISCOUNT_MODAL_DATA', payload: { target: 'sale' } });
+                }}
+                onPayment={() => dispatch({ type: 'SHOW_MODAL', payload: { modal: 'Payment', show: true } })}
+              />
+            }
+          />
+        </View>
+      </View>
 
       <PaymentModal
         visible={state.showPaymentModal}
