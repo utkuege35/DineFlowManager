@@ -14,18 +14,22 @@ export function useExistingSale() {
         .select('id, product_id, qty, unit_price, line_total, discount_amount, discount_type, products(name)')
         .eq('sale_id', saleId);
 
+      if (itemsError) {
+        console.error('Items error:', itemsError);
+      }
+
       const { data: saleData, error: saleError } = await supabase
         .from('sales')
         .select('discount_amount, discount_type')
         .eq('id', saleId)
         .single();
 
-      const items = (itemsData as any[])?.map(item => ({
+      const items = (itemsData as any[] || []).map(item => ({
         ...item,
-        products: Array.isArray(item.products) && item.products.length > 0 
-          ? item.products[0] 
-          : null
-      })) as SaleItem[] || [];
+        products: item.products && typeof item.products === 'object' 
+          ? (Array.isArray(item.products) ? item.products[0] : item.products)
+          : { name: 'Ürün' }
+      })) as SaleItem[];
       let discount: SaleDiscount | null = null;
 
       if (!saleError && saleData && saleData.discount_amount) {
