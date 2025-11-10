@@ -27,10 +27,6 @@ export function CartSummary({
 }: Props) {
   return (
     <View style={{
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      bottom: 0,
       backgroundColor: '#fff',
       borderTopWidth: 1,
       borderColor: '#eee',

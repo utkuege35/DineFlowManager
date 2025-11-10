@@ -290,12 +290,10 @@ export function OrderScreen() {
         />
       </View>
 
-      <View style={{ flex: 1 }}>
-        <ProductGrid
-          products={products}
-          onAddProduct={(product) => dispatch({ type: 'ADD_ORDER_ITEM', payload: product })}
-        />
-      </View>
+      <ProductGrid
+        products={products}
+        onAddProduct={(product) => dispatch({ type: 'ADD_ORDER_ITEM', payload: product })}
+      />
 
       <CartSummary
         loading={loadingExisting}

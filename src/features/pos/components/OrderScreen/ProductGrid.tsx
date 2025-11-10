@@ -15,6 +15,7 @@ export function ProductGrid({ products, onAddProduct }: Props) {
       keyExtractor={(it) => it.id}
       numColumns={2}
       columnWrapperStyle={{ justifyContent: 'space-between' }}
+      contentContainerStyle={{ paddingHorizontal: 8, paddingTop: 8 }}
       renderItem={({ item }) => (
         <Pressable
           onPress={() => onAddProduct(item)}
