@@ -282,46 +282,44 @@ export function OrderScreen() {
         </Pressable>
       </View>
 
-      <View style={{ flex: 1, flexDirection: 'row' }}>
-        <View style={{ width: 220, borderRightWidth: 1, borderColor: '#eee', padding: 8 }}>
-          <CategoryTabs
-            categories={categories}
-            activeCat={activeCat}
-            onSelect={setActiveCat}
-          />
+      <View style={{ padding: 8, borderBottomWidth: 1, borderColor: '#eee' }}>
+        <CategoryTabs
+          categories={categories}
+          activeCat={activeCat}
+          onSelect={setActiveCat}
+        />
+      </View>
 
-          <View style={{ flex: 1 }}>
-            <ActionButtonBar
-              submitting={submitting}
-              onSubmit={handleSubmit}
-              onMerge={() => {
-                if (!state.existingSaleId) {
-                  Alert.alert('Uyarı', 'Sadece açık siparişi olan masalar birleştirilebilir.');
-                  return;
-                }
-                loadTables();
-                dispatch({ type: 'CLEAR_MERGE_SELECTION' });
-                dispatch({ type: 'SHOW_MODAL', payload: { modal: 'Merge', show: true } });
-              }}
-              onTransfer={() => {
-                loadTables();
-                dispatch({ type: 'SHOW_MODAL', payload: { modal: 'Transfer', show: true } });
-              }}
-              onDiscount={() => {
-                if (!state.existingSaleId) return;
-                dispatch({ type: 'SET_DISCOUNT_MODAL_DATA', payload: { target: 'sale' } });
-              }}
-              onPayment={() => dispatch({ type: 'SHOW_MODAL', payload: { modal: 'Payment', show: true } })}
-            />
-          </View>
-        </View>
+      <View style={{ flex: 1 }}>
+        <ProductGrid
+          products={products}
+          onAddProduct={(product) => dispatch({ type: 'ADD_ORDER_ITEM', payload: product })}
+        />
+      </View>
 
-        <View style={{ flex: 1 }}>
-          <ProductGrid
-            products={products}
-            onAddProduct={(product) => dispatch({ type: 'ADD_ORDER_ITEM', payload: product })}
-          />
-        </View>
+      <View style={{ padding: 8, borderTopWidth: 1, borderColor: '#eee', backgroundColor: '#f9f9f9' }}>
+        <ActionButtonBar
+          submitting={submitting}
+          onSubmit={handleSubmit}
+          onMerge={() => {
+            if (!state.existingSaleId) {
+              Alert.alert('Uyarı', 'Sadece açık siparişi olan masalar birleştirilebilir.');
+              return;
+            }
+            loadTables();
+            dispatch({ type: 'CLEAR_MERGE_SELECTION' });
+            dispatch({ type: 'SHOW_MODAL', payload: { modal: 'Merge', show: true } });
+          }}
+          onTransfer={() => {
+            loadTables();
+            dispatch({ type: 'SHOW_MODAL', payload: { modal: 'Transfer', show: true } });
+          }}
+          onDiscount={() => {
+            if (!state.existingSaleId) return;
+            dispatch({ type: 'SET_DISCOUNT_MODAL_DATA', payload: { target: 'sale' } });
+          }}
+          onPayment={() => dispatch({ type: 'SHOW_MODAL', payload: { modal: 'Payment', show: true } })}
+        />
       </View>
 
       <CartSummary
