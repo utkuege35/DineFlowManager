@@ -1,5 +1,5 @@
 import React, { ReactNode } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, Pressable, FlatList } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, Pressable, TouchableOpacity } from 'react-native';
 import { SaleItem, SaleDiscount } from '../../types';
 
 type Props = {
@@ -68,18 +68,20 @@ export function CartSummary({
                     <Text style={{ fontSize: 13, color: '#666', marginRight: 8 }}>
                       {itemTotal.toFixed(2)} TL
                     </Text>
-                    <Pressable
+                    <TouchableOpacity
                       onPress={() => onDiscountExistingItem(item)}
-                      style={{ marginRight: 6, padding: 4 }}
+                      style={{ marginRight: 6, padding: 8 }}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
-                      <Text style={{ fontSize: 16 }}>%</Text>
-                    </Pressable>
-                    <Pressable
+                      <Text style={{ fontSize: 18 }}>%</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
                       onPress={() => onDeleteExistingItem(item)}
-                      style={{ padding: 4 }}
+                      style={{ padding: 8 }}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
-                      <Text style={{ fontSize: 16, color: '#F44336' }}>×</Text>
-                    </Pressable>
+                      <Text style={{ fontSize: 20, color: '#F44336', fontWeight: 'bold' }}>×</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
               );
@@ -101,12 +103,13 @@ export function CartSummary({
                   <Text style={{ fontSize: 13, marginRight: 8 }}>
                     {row.line.toFixed(2)} TL
                   </Text>
-                  <Pressable
+                  <TouchableOpacity
                     onPress={() => onRemoveCartItem(row.id)}
-                    style={{ padding: 4 }}
+                    style={{ padding: 8 }}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    <Text style={{ fontSize: 16, color: '#F44336' }}>−</Text>
-                  </Pressable>
+                    <Text style={{ fontSize: 20, color: '#F44336', fontWeight: 'bold' }}>−</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             ))}
