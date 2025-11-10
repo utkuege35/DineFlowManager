@@ -28,7 +28,6 @@ export function ProductGrid({ products, onAddProduct }: Props) {
         >
           <Text style={{ fontWeight: '600' }}>{item.name}</Text>
           <Text style={{ marginTop: 6 }}>{(item.sell_price ?? 0) + ' TL'}</Text>
-          <Text style={{ marginTop: 6, fontSize: 12, opacity: 0.6 }}>Sepete eklemek için dokun</Text>
         </Pressable>
       )}
       ListEmptyComponent={
