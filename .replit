@@ -28,3 +28,7 @@ args = "npx expo start --lan"
 [[ports]]
 localPort = 8081
 externalPort = 80
+
+[deployment]
+deploymentTarget = "autoscale"
+run = ["npx", "expo", "start"]
