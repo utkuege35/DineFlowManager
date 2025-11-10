@@ -265,14 +265,14 @@ export function OrderScreen() {
   };
 
   return (
-    <View style={{ flex: 1, marginTop: 40 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderColor: '#eee' }}>
+    <View style={{ flex: 1, marginTop: 20 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderBottomWidth: 1, borderColor: '#eee' }}>
         <View>
-          <Text style={{ fontSize: 20, fontWeight: 'bold' }}>
+          <Text style={{ fontSize: 18, fontWeight: 'bold' }}>
             Masa {state.selectedTable?.number}
           </Text>
           {state.currentUser && (
-            <Text style={{ fontSize: 12, color: '#666' }}>
+            <Text style={{ fontSize: 11, color: '#666' }}>
               Garson: {state.currentUser.name}
             </Text>
           )}
@@ -282,7 +282,7 @@ export function OrderScreen() {
         </Pressable>
       </View>
 
-      <View style={{ padding: 8, borderBottomWidth: 1, borderColor: '#eee' }}>
+      <View style={{ paddingHorizontal: 8, paddingVertical: 6, borderBottomWidth: 1, borderColor: '#eee' }}>
         <CategoryTabs
           categories={categories}
           activeCat={activeCat}

@@ -20,14 +20,14 @@ export function ProductGrid({ products, onAddProduct }: Props) {
           onPress={() => onAddProduct(item)}
           style={{
             backgroundColor: '#f7f7f7',
-            padding: 14,
-            borderRadius: 10,
-            marginBottom: 12,
+            padding: 10,
+            borderRadius: 8,
+            marginBottom: 8,
             width: '48%',
           }}
         >
-          <Text style={{ fontWeight: '600' }}>{item.name}</Text>
-          <Text style={{ marginTop: 6 }}>{(item.sell_price ?? 0) + ' TL'}</Text>
+          <Text style={{ fontWeight: '600', fontSize: 14 }}>{item.name}</Text>
+          <Text style={{ marginTop: 4, fontSize: 13 }}>{(item.sell_price ?? 0) + ' TL'}</Text>
         </Pressable>
       )}
       ListEmptyComponent={

@@ -13,18 +13,16 @@ export function CategoryTabs({ categories, activeCat, onSelect }: Props) {
     <ScrollView 
       horizontal 
       showsHorizontalScrollIndicator={false}
-      style={{ marginBottom: 12 }}
     >
       {categories.map((c) => (
         <Pressable
           key={c.id}
           onPress={() => onSelect(c.id)}
           style={{
-            marginRight: 8,
-            marginBottom: 6,
+            marginRight: 6,
             backgroundColor: activeCat === c.id ? '#007AFF' : '#f7f7f7',
             paddingHorizontal: 10,
-            paddingVertical: 8,
+            paddingVertical: 6,
             borderRadius: 6
           }}
         >
